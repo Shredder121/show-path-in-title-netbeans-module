@@ -29,6 +29,7 @@ import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataShadow;
 import org.openide.nodes.Node;
+import org.openide.util.Lookup;
 import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
@@ -39,23 +40,30 @@ import org.openide.windows.WindowManager;
  */
 class PathUtil {
 
-    public String getPath(ShowPathInTitleOptions options) {
-        TopComponent activeTC = null;
+    public String getPath(ShowPathInTitleOptions options, TopComponent editor, Node[] selectedNodes) {
+        Lookup.Provider active = null;
         if (options.useNodeAsReference) {
-            activeTC = TopComponent.getRegistry().getActivated();
+            //TODO: multiple paths
+            active = firstOrNull(selectedNodes);
+            if (active != null) {
+                // pick a better lookup target, since Node doesn't necessarily have a Project etc.
+                active = active.getLookup().lookup(DataObject.class);
+            }
         }
-        if (options.useEditorAsReference) {
-            activeTC = getCurrentEditor();
+        if (active == null || options.useEditorAsReference) {
+            WindowManager wm = WindowManager.getDefault();
+            boolean isEditor = editor != null && wm.isEditorTopComponent(editor);
+            active = isEditor ? editor : getCurrentEditor();
         }
 
-        if (null == activeTC) {
+        if (null == active) {
             return null;
         }
 
-        DataObject dataObject = activeTC.getLookup().lookup(DataObject.class);
-        Project project = activeTC.getLookup().lookup(Project.class);
-        Node node = activeTC.getLookup().lookup(Node.class);
-        FileObject fileObject = activeTC.getLookup().lookup(FileObject.class);
+        DataObject dataObject = active.getLookup().lookup(DataObject.class);
+        Project project = active.getLookup().lookup(Project.class);
+        Node node = active.getLookup().lookup(Node.class);
+        FileObject fileObject = active.getLookup().lookup(FileObject.class);
         //                showInStatusBar(project);
 
         String projectName = null;
@@ -218,5 +226,9 @@ class PathUtil {
 
     private boolean isEmpty(String string) {
         return null == string || "".equals(string);
+    }
+
+    private <T> T firstOrNull(T[] array) {
+        return array != null && array.length > 0 ? array[0] : null;
     }
 }

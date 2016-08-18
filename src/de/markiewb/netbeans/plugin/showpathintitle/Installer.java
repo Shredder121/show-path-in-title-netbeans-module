@@ -15,12 +15,16 @@
  */
 package de.markiewb.netbeans.plugin.showpathintitle;
 
+import static org.openide.windows.TopComponent.Registry.*;
+
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
 import java.util.prefs.Preferences;
+
 import org.openide.modules.ModuleInstall;
+import org.openide.nodes.Node;
 import org.openide.util.NbPreferences;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
@@ -41,12 +45,12 @@ public class Installer extends ModuleInstall implements PreferenceChangeListener
     private Preferences pref = NbPreferences.forModule(ShowPathInTitleOptions.class);
     private String previousTitle;
 
-    private void updateTitle() {
+    private void updateTitle(final TopComponent editor, final Node[] selectedNodes) {
         // on change set the title
         WindowManager.getDefault().invokeWhenUIReady(new Runnable() {
             @Override
             public void run() {
-                final String title = new PathUtil().getPath(ShowPathInTitleOptions.loadFrom(pref));
+                final String title = new PathUtil().getPath(ShowPathInTitleOptions.loadFrom(pref), editor, selectedNodes);
                 WindowManager.getDefault().getMainWindow().setTitle(defaultIfEmpty(title, previousTitle));
             }
         });
@@ -84,15 +88,16 @@ public class Installer extends ModuleInstall implements PreferenceChangeListener
             @Override
             public void run() {
                 // code to be invoked when system UI is ready
+                TopComponent.Registry registry = TopComponent.getRegistry();
 
                 //backup original title
                 previousTitle = WindowManager.getDefault().getMainWindow().getTitle();
 
-                TopComponent.getRegistry().addPropertyChangeListener(listenerA);
+                registry.addPropertyChangeListener(listenerA);
                 pref.addPreferenceChangeListener(listenerB);
 
                 // initial setting of title
-                updateTitle();
+                updateTitle(registry.getActivated(), registry.getActivatedNodes());
 
             }
         });
@@ -100,11 +105,23 @@ public class Installer extends ModuleInstall implements PreferenceChangeListener
 
     @Override
     public void preferenceChange(PreferenceChangeEvent evt) {
-        updateTitle();
+        TopComponent.Registry registry = TopComponent.getRegistry();
+        updateTitle(registry.getActivated(), registry.getActivatedNodes());
     }
 
     @Override
     public void propertyChange(PropertyChangeEvent evt) {
-        updateTitle();
+        String propertyName = evt.getPropertyName();
+        Object newValue = evt.getNewValue();
+        if (evt.getSource() instanceof TopComponent.Registry) {
+            TopComponent.Registry registry = (TopComponent.Registry) evt.getSource();
+
+            ShowPathInTitleOptions options = ShowPathInTitleOptions.loadFrom(pref);
+            if (options.useEditorAsReference && PROP_ACTIVATED.equals(propertyName)) {
+                updateTitle((TopComponent) newValue, registry.getActivatedNodes());
+            } else if (options.useNodeAsReference && PROP_ACTIVATED_NODES.equals(propertyName)) {
+                updateTitle(registry.getActivated(), (org.openide.nodes.Node[]) newValue);
+            }
+        }
     }
 }
